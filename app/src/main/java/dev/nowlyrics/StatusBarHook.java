@@ -5,8 +5,11 @@ import android.content.ContentResolver;
 import android.database.ContentObserver;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
+import android.text.Layout;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
@@ -35,6 +38,8 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
     private static final String CLOCK = SYSTEM_UI + ".statusbar.policy.Clock";
     private static final String STATUS_BAR = SYSTEM_UI + ".statusbar.phone.PhoneStatusBarView";
     private static final Uri LYRIC = Uri.parse(StatusLyricProvider.URI);
+    private static final long SCROLL_DELAY_MS = 650;
+    private static final float SCROLL_DP_PER_SECOND = 36f;
     private final WeakHashMap<TextView, String> lyrics = new WeakHashMap<>();
     private final ExecutorService reader = Executors.newSingleThreadExecutor();
 
@@ -99,11 +104,12 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
         private final View centerClock;
         private final TextView clock;
         private final ViewTreeObserver.OnGlobalLayoutListener layoutChanged = this::fitLyric;
+        private final ViewTreeObserver.OnPreDrawListener drawScroll = this::drawScroll;
         private LinearLayout.LayoutParams expandedEndParams;
         private int originalEndWidth;
         private float originalEndWeight;
-        private boolean originalSelection;
-        private int originalMarqueeLimit;
+        private boolean originalHorizontalScrolling;
+        private long scrollStartsAt;
         private AnimationSet transition;
         private final Method updateClock;
         private final int originalMaxWidth;
@@ -136,6 +142,7 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
                 clock.getContext().getContentResolver().registerContentObserver(LYRIC, false, observer);
                 listening = true;
                 bar.getViewTreeObserver().addOnGlobalLayoutListener(layoutChanged);
+                bar.getViewTreeObserver().addOnPreDrawListener(drawScroll);
                 refresh();
             } catch (RuntimeException error) {
                 Log.w("NowLyrics", "Unable to observe status bar lyrics", error);
@@ -147,6 +154,7 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
             listening = false;
             request++;
             bar.getViewTreeObserver().removeOnGlobalLayoutListener(layoutChanged);
+            bar.getViewTreeObserver().removeOnPreDrawListener(drawScroll);
             clock.getContext().getContentResolver().unregisterContentObserver(observer);
             show("");
         }
@@ -227,6 +235,26 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
             expandedEndParams = null;
         }
 
+        private boolean drawScroll() {
+            String line = lyrics.get(clock);
+            Layout layout = clock.getLayout();
+            int width = clock.getWidth() - clock.getCompoundPaddingLeft()
+                    - clock.getCompoundPaddingRight();
+            if (line == null || !TextUtils.equals(clock.getText(), line)
+                    || !clock.isShown() || layout == null || width <= 0) return true;
+
+            int left = (int) Math.floor(layout.getLineLeft(0));
+            int right = (int) Math.ceil(layout.getLineRight(0));
+            int overflow = Math.max(0, right - left - width);
+            long elapsed = SystemClock.uptimeMillis() - scrollStartsAt;
+            float speed = SCROLL_DP_PER_SECOND * clock.getResources().getDisplayMetrics().density;
+            int distance = Math.min(overflow, Math.round(Math.max(0, elapsed) * speed / 1000));
+            boolean rtl = layout.getParagraphDirection(0) == Layout.DIR_RIGHT_TO_LEFT;
+            clock.setScrollX(rtl ? Math.max(left, right - width) - distance : left + distance);
+            if (elapsed >= 0 && distance < overflow) clock.postInvalidateOnAnimation();
+            return true;
+        }
+
         private void show(String line) {
             String previous = lyrics.get(clock);
             if (TextUtils.equals(previous, line) || (previous == null && line.isEmpty())) return;
@@ -236,17 +264,22 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
                 if (widthInEms) clock.setMaxEms(originalMaxWidth);
                 else clock.setMaxWidth(originalMaxWidth);
                 clock.setEllipsize(originalEllipsize);
-                clock.setMarqueeRepeatLimit(originalMarqueeLimit);
-                clock.setSelected(originalSelection);
+                if (Build.VERSION.SDK_INT >= 29) {
+                    clock.setHorizontallyScrolling(originalHorizontalScrolling);
+                }
+                clock.setScrollX(0);
                 if (transition != null && clock.getAnimation() == transition) clock.clearAnimation();
             } else {
                 lyrics.put(clock, line);
+                scrollStartsAt = SystemClock.uptimeMillis() + SCROLL_DELAY_MS;
+                clock.postInvalidateDelayed(SCROLL_DELAY_MS);
+                clock.setScrollX(0);
                 if (previous == null) {
-                    originalSelection = clock.isSelected();
-                    originalMarqueeLimit = clock.getMarqueeRepeatLimit();
-                    clock.setMarqueeRepeatLimit(-1);
-                    clock.setEllipsize(TextUtils.TruncateAt.MARQUEE);
-                    clock.setSelected(true);
+                    if (Build.VERSION.SDK_INT >= 29) {
+                        originalHorizontalScrolling = clock.isHorizontallyScrollable();
+                        clock.setHorizontallyScrolling(true);
+                    }
+                    clock.setEllipsize(null);
                 }
                 fitLyric();
             }

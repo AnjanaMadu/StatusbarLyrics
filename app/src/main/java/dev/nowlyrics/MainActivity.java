@@ -241,7 +241,7 @@ public final class MainActivity extends Activity {
                     + "\nSpeed: " + (state == null ? "-" : state.getPlaybackSpeed())
                     + "\nState age: " + (state == null || state.getLastPositionUpdateTime() <= 0
                     ? "-" : (now - state.getLastPositionUpdateTime()) + " ms")
-                    + "\nLyrics: LRCLIB · " + lookup
+                    + "\nLyrics: " + lookup
                     + "\nQuery: " + (track == null ? "-" : track.title() + " / " + track.artist())
                     + "\nMatch: " + match
                     + "\nTimed lines: " + lines.size() + " · Active line: "

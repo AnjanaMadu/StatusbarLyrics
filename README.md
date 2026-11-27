@@ -1,8 +1,8 @@
 # Now Lyrics
 
-Now Lyrics shows the current YouTube Music track and synced lyrics on Android. On rooted devices, the optional Vector module shows the current line in the native SystemUI status bar. New lines slide up and fade in, and lines that exceed the available width scroll horizontally.
+Now Lyrics shows the current YouTube Music track and synced lyrics on Android. On rooted devices, the optional Vector module shows the current line in the native SystemUI status bar. New lines slide up and fade in. Long lines wait 650 ms, scroll horizontally once, and hold at the end until the lyric changes.
 
-The app reads playback information from Android's media session and looks up timed lyrics on [LRCLIB](https://lrclib.net/). A track needs a synced match for lyrics to appear.
+The app reads playback information from Android's media session and tries NetEase Cloud Music first, using the search and lyric endpoints documented by the [StatusBarLyricExt provider](https://github.com/cjybyjk/StatusBarLyricExt/blob/main/app/src/main/java/io/cjybyjk/statuslyricext/provider/NeteaseProvider.java). It falls back to [LRCLIB](https://lrclib.net/) when NetEase is unavailable or returns no synced match. The info panel shows the lookup outcome for each provider tried.
 
 ## Install
 
