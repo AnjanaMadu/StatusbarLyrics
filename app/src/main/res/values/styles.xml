@@ -1,0 +1,6 @@
+<resources>
+    <style name="NowLyricsTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#141218</item>
+        <item name="android:colorAccent">#E5C9FF</item>
+    </style>
+</resources>

@@ -1,0 +1,27 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <application android:theme="@style/NowLyricsTheme" android:label="Now Lyrics" android:allowBackup="false">
+        <meta-data android:name="xposedmodule" android:value="true"/>
+        <meta-data android:name="xposeddescription" android:value="Show the current synced lyric in the status bar"/>
+        <meta-data android:name="xposedminversion" android:value="82"/>
+        <meta-data android:name="xposedscope" android:value="com.android.systemui"/>
+        <provider android:name=".StatusLyricProvider"
+            android:authorities="dev.nowlyrics.statuslyric"
+            android:exported="true"
+            android:readPermission="android.permission.STATUS_BAR_SERVICE"
+            android:writePermission="android.permission.STATUS_BAR_SERVICE"/>
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <service android:name=".SessionAccess" android:exported="true"
+            android:label="Now Lyrics session access"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService"/>
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

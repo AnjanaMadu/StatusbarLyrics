@@ -1,0 +1,20 @@
+plugins {
+    id 'com.android.application' version '9.2.1'
+}
+android {
+    namespace 'dev.nowlyrics'
+    compileSdk 36
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    defaultConfig {
+        applicationId 'dev.nowlyrics'
+        minSdk 26
+        targetSdk 34
+        versionCode 8
+        versionName '1.7'
+    }
+}
+
+dependencies { compileOnly project(':xposed-api-stubs') }

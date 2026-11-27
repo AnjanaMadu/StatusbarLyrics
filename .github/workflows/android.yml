@@ -1,0 +1,60 @@
+name: Build and release Android
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK packages
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+
+      - name: Build and check release
+        run: bash gradlew :app:assembleRelease
+
+      - name: Sign and publish tagged release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          version=$(sed -n "s/^[[:space:]]*versionName '\([^']*\)'.*/\1/p" app/build.gradle)
+          if [[ -z "$version" || "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "Release tag must match versionName in app/build.gradle." >&2
+            exit 1
+          fi
+
+          : "${ANDROID_KEYSTORE_BASE64:?Configure the repository signing keystore}"
+          umask 077
+          keystore=$(mktemp)
+          trap 'rm -f "$keystore"' EXIT
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+
+          apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          apk="now-lyrics-$version-release.apk"
+          "$apksigner" sign --ks "$keystore" --ks-key-alias androiddebugkey \
+            --ks-pass pass:android --key-pass pass:android --out "$apk" \
+            app/build/outputs/apk/release/app-release-unsigned.apk
+          "$apksigner" verify "$apk"
+          gh release create "$GITHUB_REF_NAME" "$apk" --verify-tag \
+            --title "Now Lyrics $version" --generate-notes

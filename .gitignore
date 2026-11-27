@@ -1,0 +1,10 @@
+.gradle/
+.idea/
+local.properties
+**/build/
+
+# Local signing material and packaged builds
+*.jks
+*.keystore
+*.apk
+*.idsig
