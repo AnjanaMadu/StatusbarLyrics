@@ -24,6 +24,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.WeakHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -36,17 +37,24 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 public final class StatusBarHook implements IXposedHookLoadPackage {
     private static final String SYSTEM_UI = "com.android.systemui";
     private static final String CLOCK = SYSTEM_UI + ".statusbar.policy.Clock";
+    private static final String SAMSUNG_CLOCK = SYSTEM_UI + ".statusbar.policy.QSClockIndicatorView";
+    private static final String SAMSUNG_CLOCK_SOUND = SYSTEM_UI + ".statusbar.policy.QSClockBellSound";
     private static final String STATUS_BAR = SYSTEM_UI + ".statusbar.phone.PhoneStatusBarView";
     private static final Uri LYRIC = Uri.parse(StatusLyricProvider.URI);
     private static final long SCROLL_DELAY_MS = 180;
     private static final long LINE_TRANSITION_MS = 150;
     private static final float SCROLL_DP_PER_SECOND = 36f;
     private final WeakHashMap<TextView, String> lyrics = new WeakHashMap<>();
+    private final WeakHashMap<TextView, CharSequence> nativeSamsungText = new WeakHashMap<>();
     private final ExecutorService reader = Executors.newSingleThreadExecutor();
 
     @Override public void handleLoadPackage(LoadPackageParam param) {
         if (!SYSTEM_UI.equals(param.packageName)) return;
         try {
+            if ("samsung".equalsIgnoreCase(Build.MANUFACTURER)) {
+                hookSamsungStatusBar(param.classLoader);
+                return;
+            }
             Class<?> clockClass = Class.forName(CLOCK, false, param.classLoader);
             Method updateClock = findClockUpdate(clockClass);
             updateClock.setAccessible(true);
@@ -78,10 +86,65 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
                         }
                     });
         } catch (ClassNotFoundException otherLoader) {
-            // SystemUI can load additional packages through unrelated class loaders.
+            if ("samsung".equalsIgnoreCase(Build.MANUFACTURER)) {
+                Log.w("NowLyrics", "One UI status bar classes unavailable", otherLoader);
+            }
         } catch (ReflectiveOperationException | LinkageError | RuntimeException error) {
             Log.w("NowLyrics", "Unable to initialize status bar lyrics", error);
         }
+    }
+
+    private void hookSamsungStatusBar(ClassLoader loader) throws ReflectiveOperationException {
+        Class<?> clockClass = Class.forName(SAMSUNG_CLOCK, false, loader);
+        Class<?> soundClass = Class.forName(SAMSUNG_CLOCK_SOUND, false, loader);
+        Class<?> barClass = Class.forName(STATUS_BAR, false, loader);
+        clockClass.getDeclaredMethod("notifyTimeChanged", soundClass);
+        barClass.getDeclaredMethod("onFinishInflate");
+        XposedHelpers.findAndHookMethod(SAMSUNG_CLOCK, loader, "notifyTimeChanged", soundClass,
+                new XC_MethodHook() {
+                    @Override protected void afterHookedMethod(MethodHookParam hook) {
+                        TextView clock = (TextView) hook.thisObject;
+                        String line = lyrics.get(clock);
+                        if (line == null) return;
+                        if (!TextUtils.equals(clock.getText(), line)) {
+                            nativeSamsungText.put(clock, TextUtils.stringOrSpannedString(clock.getText()));
+                        }
+                        CharSequence text = isLocked(clock) ? nativeSamsungText.get(clock) : line;
+                        if (!TextUtils.equals(clock.getText(), text)) clock.setText(text);
+                    }
+                });
+        XposedHelpers.findAndHookMethod(STATUS_BAR, loader, "onFinishInflate", new XC_MethodHook() {
+            @Override protected void afterHookedMethod(MethodHookParam hook) {
+                View bar = (View) hook.thisObject;
+                View candidate = findView(bar, "clock");
+                if (!clockClass.isInstance(candidate)) {
+                    ArrayList<TextView> clocks = new ArrayList<>();
+                    findSamsungClocks(bar, clockClass, clocks);
+                    candidate = clocks.size() == 1 ? clocks.get(0) : null;
+                }
+                if (candidate instanceof TextView clock) {
+                    bar.addOnAttachStateChangeListener(new LyricBinding(bar, clock, null));
+                    Log.i("NowLyrics", "One UI status bar clock found");
+                } else {
+                    Log.w("NowLyrics", "No unambiguous One UI clock in PhoneStatusBarView");
+                }
+            }
+        });
+    }
+
+    private static void findSamsungClocks(View root, Class<?> clockClass, ArrayList<TextView> clocks) {
+        if (root instanceof TextView clock && clockClass.isInstance(clock)) {
+            clocks.add(clock);
+        } else if (root instanceof ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) {
+                findSamsungClocks(group.getChildAt(i), clockClass, clocks);
+            }
+        }
+    }
+
+    private static boolean isLocked(TextView clock) {
+        KeyguardManager keyguard = clock.getContext().getSystemService(KeyguardManager.class);
+        return keyguard == null || keyguard.isKeyguardLocked();
     }
 
     private static View findView(View bar, String name) {
@@ -125,13 +188,20 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
         };
         private boolean listening;
         private int request;
+        private String requestedLine = "";
 
         LyricBinding(View bar, TextView clock, Method updateClock) {
             this.bar = bar;
             this.clock = clock;
             startScroll = clock::invalidate;
-            startSide = findView(bar, "status_bar_start_side_container");
-            endSide = findView(bar, "status_bar_end_side_container");
+            View start = findView(bar, "status_bar_start_side_container");
+            View end = findView(bar, "status_bar_end_side_container");
+            if (updateClock == null) {
+                if (start == null) start = findView(bar, "status_bar_left_side");
+                if (end == null) end = findView(bar, "status_bar_right_side");
+            }
+            startSide = start;
+            endSide = end;
             cutoutSpace = findView(bar, "cutout_space_view");
             centerClock = findView(bar, "clock_center");
             this.updateClock = updateClock;
@@ -159,6 +229,7 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
             bar.getViewTreeObserver().removeOnGlobalLayoutListener(layoutChanged);
             bar.getViewTreeObserver().removeOnPreDrawListener(drawScroll);
             clock.getContext().getContentResolver().unregisterContentObserver(observer);
+            requestedLine = "";
             show("");
         }
 
@@ -175,7 +246,10 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
                 }
                 String line = text;
                 main.post(() -> {
-                    if (listening && reading == request) show(line);
+                    if (listening && reading == request) {
+                        requestedLine = line == null ? "" : line;
+                        show(updateClock == null && isLocked(clock) ? "" : requestedLine);
+                    }
                 });
             });
         }
@@ -239,6 +313,19 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
         }
 
         private boolean drawScroll() {
+            if (updateClock == null && !requestedLine.isEmpty()) {
+                if (isLocked(clock)) {
+                    if (lyrics.containsKey(clock)) {
+                        show("");
+                        return false;
+                    }
+                    return true;
+                }
+                if (!lyrics.containsKey(clock)) {
+                    show(requestedLine);
+                    return false;
+                }
+            }
             String line = lyrics.get(clock);
             Layout layout = clock.getLayout();
             int width = clock.getWidth() - clock.getCompoundPaddingLeft()
@@ -274,6 +361,9 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
                 clock.setScrollX(0);
                 if (transition != null && clock.getAnimation() == transition) clock.clearAnimation();
             } else {
+                if (updateClock == null && previous == null) {
+                    nativeSamsungText.put(clock, TextUtils.stringOrSpannedString(clock.getText()));
+                }
                 lyrics.put(clock, line);
                 scrollStartsAt = SystemClock.uptimeMillis() + SCROLL_DELAY_MS;
                 main.postAtTime(startScroll, scrollStartsAt);
@@ -288,7 +378,9 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
                 fitLyric();
             }
             try {
-                if (updateClock.getParameterCount() == 0) updateClock.invoke(clock);
+                if (updateClock == null) {
+                    clock.setText(line.isEmpty() ? nativeSamsungText.remove(clock) : line);
+                } else if (updateClock.getParameterCount() == 0) updateClock.invoke(clock);
                 else updateClock.invoke(clock, true);
             } catch (ReflectiveOperationException error) {
                 Log.w("NowLyrics", "Unable to refresh status bar clock", error);

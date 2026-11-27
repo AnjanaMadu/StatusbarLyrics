@@ -1,34 +1,48 @@
 # Now Lyrics
 
-Now Lyrics shows the current track and synced lyrics on Android. It works with music apps that expose track metadata and playback through Android's media session, including Spotify, YouTube Music, Apple Music, Amazon Music, TIDAL, and Deezer. On rooted devices, the optional Vector module shows the current line in the native SystemUI status bar. New lines slide up and fade in. Long lines wait 180 ms, scroll horizontally once, and hold at the end until the lyric changes.
+Now Lyrics displays synchronized lyrics for the track playing on Android. Follow along in the app or, on a rooted device with Vector, show the current line in the status bar.
 
-The app reads playback information from Android's media session and uses [LRCLIB](https://lrclib.net/) to find synced lyrics. The info panel shows the lookup outcome.
+[Download the APK](../../releases)
 
-## Demo
+![Now Lyrics showing synchronized lyrics in the Android status bar](docs/status-bar-demo.webp)
 
-![Synced lyrics scrolling in the Android status bar](docs/status-bar-demo.webp)
+## Features
 
-## Install
+- Reads the current track and playback position from Android media sessions. Music apps such as Spotify, YouTube Music, and Apple Music can work when they expose this information.
+- Finds timed lyrics through LRCLIB and caches results locally for repeat plays.
+- Shows the current lyric in the native status-bar clock on supported ROMs. Long lines scroll once, and the clock returns when playback pauses or no timed line is available.
+- Includes a **Bar** toggle and a diagnostics panel that shows the active media session, lookup result, and playback timing.
 
-1. Download the signed APK from [Releases](../../releases) and install it.
-2. Open Now Lyrics and grant notification access.
-3. For status-bar lyrics, enable **Now Lyrics** in Vector, select **System UI** (`com.android.systemui`) as the module scope, and restart SystemUI or reboot.
-4. Play a track in your music app. The status-bar clock returns when playback pauses or no timed line is available.
+## Getting started
 
-The app targets Android 8.0 and above. The SystemUI hook was tested on a rooted Pixel 5 running Android 17 with Vector 2.2. Status-bar layouts vary by ROM. The info button in the app shows the active media session, lyrics lookup result, and playback timing.
+1. Install the signed APK from [GitHub Releases](../../releases) on Android 8.0 or newer.
+2. Open Now Lyrics and grant notification access so it can read the active media session.
+3. Play a track in your music app and open Now Lyrics.
 
-## Build locally
+### Enable status-bar lyrics
 
-Use JDK 17 and install Android SDK Platform 36 and Build Tools 36. Open the project in Android Studio or run the Gradle wrapper.
+1. On a rooted device, enable **Now Lyrics** in Vector.
+2. Set the module scope to **System UI** (`com.android.systemui`).
+3. Restart SystemUI or reboot, then turn on **Bar** in Now Lyrics.
+
+| SystemUI | Status |
+| --- | --- |
+| LineageOS-based ROMs | The existing v2 hook works on tested builds. |
+| Samsung One UI | The Samsung clock hook was confirmed on the experimental branch. The integrated v2 build and width adjustment still need Galaxy validation. |
+| Pixel / AOSP-style ROMs | The status-bar hook was tested on a rooted Pixel 5 running Android 17 with Vector 2.2. |
+
+Compatibility depends on the ROM's SystemUI layout. If lyrics appear in the app but the status bar still shows the clock, check **Bar**, confirm the Vector scope, and restart SystemUI. When reporting an issue, include your device, ROM version, and any SystemUI log entries tagged `NowLyrics`.
+
+## Build from source
+
+Use JDK 17, Android SDK Platform 36, and Android SDK Build Tools 36.0.0. From the repository root, run the Gradle wrapper.
 
 ```sh
 ./gradlew :app:assembleDebug :app:assembleRelease
 ```
 
-On Windows use `gradlew.bat`. APKs are written to `app/build/outputs/apk/`. The release APK from a local Gradle build is unsigned.
+On Windows, use `gradlew.bat` with the same tasks. Gradle writes APKs to `app/build/outputs/apk/`. The local release APK is unsigned.
 
-## Publish a release
+### Publish a release
 
-GitHub Actions builds and checks the app on pushes and pull requests targeting `main`. To publish, update `versionCode` and `versionName` in `app/build.gradle`, push the commit, and push a matching tag such as `v1.7`. The tag build signs the APK, verifies its signature, and publishes it to Releases.
-
-The repository Actions secret `ANDROID_KEYSTORE_BASE64` holds the project's signing keystore. Releases use the same project-local signing certificate as the APK already installed on the test device.
+GitHub Actions builds the app for pushes and pull requests targeting `main`. To publish a release, update `versionCode` and `versionName` in `app/build.gradle`, push the commit, and push a tag that matches `versionName` (for example, `v2.1` for version `2.1`). The [Android workflow](.github/workflows/android.yml) uses the `ANDROID_KEYSTORE_BASE64` repository secret to sign the APK, verifies the signature, and publishes the APK to GitHub Releases.
