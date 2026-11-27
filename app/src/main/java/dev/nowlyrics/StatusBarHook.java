@@ -38,7 +38,8 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
     private static final String CLOCK = SYSTEM_UI + ".statusbar.policy.Clock";
     private static final String STATUS_BAR = SYSTEM_UI + ".statusbar.phone.PhoneStatusBarView";
     private static final Uri LYRIC = Uri.parse(StatusLyricProvider.URI);
-    private static final long SCROLL_DELAY_MS = 650;
+    private static final long SCROLL_DELAY_MS = 180;
+    private static final long LINE_TRANSITION_MS = 150;
     private static final float SCROLL_DP_PER_SECOND = 36f;
     private final WeakHashMap<TextView, String> lyrics = new WeakHashMap<>();
     private final ExecutorService reader = Executors.newSingleThreadExecutor();
@@ -105,6 +106,7 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
         private final TextView clock;
         private final ViewTreeObserver.OnGlobalLayoutListener layoutChanged = this::fitLyric;
         private final ViewTreeObserver.OnPreDrawListener drawScroll = this::drawScroll;
+        private final Runnable startScroll;
         private LinearLayout.LayoutParams expandedEndParams;
         private int originalEndWidth;
         private float originalEndWeight;
@@ -127,6 +129,7 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
         LyricBinding(View bar, TextView clock, Method updateClock) {
             this.bar = bar;
             this.clock = clock;
+            startScroll = clock::invalidate;
             startSide = findView(bar, "status_bar_start_side_container");
             endSide = findView(bar, "status_bar_end_side_container");
             cutoutSpace = findView(bar, "cutout_space_view");
@@ -258,6 +261,7 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
         private void show(String line) {
             String previous = lyrics.get(clock);
             if (TextUtils.equals(previous, line) || (previous == null && line.isEmpty())) return;
+            main.removeCallbacks(startScroll);
             if (line.isEmpty()) {
                 lyrics.remove(clock);
                 restoreEndSide();
@@ -272,7 +276,7 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
             } else {
                 lyrics.put(clock, line);
                 scrollStartsAt = SystemClock.uptimeMillis() + SCROLL_DELAY_MS;
-                clock.postInvalidateDelayed(SCROLL_DELAY_MS);
+                main.postAtTime(startScroll, scrollStartsAt);
                 clock.setScrollX(0);
                 if (previous == null) {
                     if (Build.VERSION.SDK_INT >= 29) {
@@ -295,7 +299,7 @@ public final class StatusBarHook implements IXposedHookLoadPackage {
                         Animation.ABSOLUTE, 0f, Animation.ABSOLUTE, 0f,
                         Animation.RELATIVE_TO_SELF, 0.55f, Animation.RELATIVE_TO_SELF, 0f));
                 transition.addAnimation(new AlphaAnimation(0f, 1f));
-                transition.setDuration(260);
+                transition.setDuration(LINE_TRANSITION_MS);
                 transition.setInterpolator(new DecelerateInterpolator());
                 clock.startAnimation(transition);
             }
