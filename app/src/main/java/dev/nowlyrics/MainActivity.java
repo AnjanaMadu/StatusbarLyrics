@@ -218,14 +218,14 @@ public final class MainActivity extends Activity {
             playback.setContentDescription(playbackAction);
         }
         playback.setVisibility(state == null ? View.GONE : View.VISIBLE);
-        setText(artist, track == null ? "YouTube Music" : track.artist() +
+        setText(artist, track == null ? "" : track.artist() +
                 (track.album().isEmpty() ? "" : "  ·  " + track.album()));
         long raw = state == null ? -1 : state.getPosition();
         long position = LyricsData.position(state, track, now);
         setText(clock, format(position) + " / " + format(track == null || track.duration() <= 0
                 ? -1 : track.duration()));
         progress.setProgress(track == null || track.duration() <= 0 || position < 0 ? 0 : (int) (1000.0 * position / track.duration()));
-        setText(status, !sessionError.isEmpty() ? sessionError : track == null ? "Play a song in YouTube Music" : lookup);
+        setText(status, !sessionError.isEmpty() ? sessionError : track == null ? "Play a song in a music app" : lookup);
         retry.setVisibility(track != null && lines.isEmpty() && !lookup.startsWith("Looking") ? View.VISIBLE : View.GONE);
         follow.setVisibility(lines.isEmpty() || following ? View.GONE : View.VISIBLE);
         status.setVisibility(lines.isEmpty() ? View.VISIBLE : View.GONE);
@@ -254,9 +254,10 @@ public final class MainActivity extends Activity {
         ArrayList<String> packages = new ArrayList<>();
         controller = null;
         try {
-            for (MediaController candidate : manager.getActiveSessions(new ComponentName(this, SessionAccess.class))) {
+            List<MediaController> active = manager.getActiveSessions(new ComponentName(this, SessionAccess.class));
+            controller = SessionAccess.preferredSession(active);
+            for (MediaController candidate : active) {
                 packages.add(candidate.getPackageName());
-                if (controller == null && SessionAccess.YTM.equals(candidate.getPackageName())) controller = candidate;
             }
             sessionError = "";
         } catch (SecurityException denied) {
@@ -276,7 +277,7 @@ public final class MainActivity extends Activity {
         match = "";
         showLines(java.util.Collections.emptyList());
         if (current == null) {
-            lookup = "Play a song in YouTube Music";
+            lookup = "Play a song in a music app";
             return;
         }
         lookup = "Looking up lyrics…";

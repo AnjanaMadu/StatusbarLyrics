@@ -2,6 +2,7 @@ package dev.nowlyrics;
 
 import android.content.ComponentName;
 import android.media.session.MediaController;
+import android.media.session.MediaSession;
 import android.media.session.MediaSessionManager;
 import android.media.session.PlaybackState;
 import android.os.Handler;
@@ -9,7 +10,10 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.service.notification.NotificationListenerService;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -18,11 +22,9 @@ import dev.nowlyrics.LyricsData.Line;
 import dev.nowlyrics.LyricsData.Track;
 
 public final class SessionAccess extends NotificationListenerService {
-    static final String YTM = "com.google.android.apps.youtube.music";
-
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService network = Executors.newSingleThreadExecutor();
-    private final MediaSessionManager.OnActiveSessionsChangedListener sessionsChanged = this::selectSession;
+    private final MediaSessionManager.OnActiveSessionsChangedListener sessionsChanged = this::observeSessions;
     private final MediaController.Callback playbackChanged = new MediaController.Callback() {
         @Override public void onMetadataChanged(android.media.MediaMetadata metadata) {
             update();
@@ -33,15 +35,21 @@ public final class SessionAccess extends NotificationListenerService {
         }
 
         @Override public void onSessionDestroyed() {
-            selectSession(List.of());
+            if (manager != null) {
+                try {
+                    observeSessions(manager.getActiveSessions(new ComponentName(SessionAccess.this, SessionAccess.class)));
+                } catch (SecurityException denied) {
+                    disconnect();
+                }
+            }
         }
     };
 
     private final Runnable tick = this::update;
     private MediaSessionManager manager;
-    private MediaController controller;
+    private final Map<MediaSession.Token, MediaController> observed = new LinkedHashMap<>();
     private Track track;
-    private List<Line> lines = List.of();
+    private List<Line> lines = Collections.emptyList();
     private int generation;
 
     @Override public void onListenerConnected() {
@@ -51,7 +59,7 @@ public final class SessionAccess extends NotificationListenerService {
         try {
             sessions.addOnActiveSessionsChangedListener(sessionsChanged, listener, handler);
             manager = sessions;
-            selectSession(sessions.getActiveSessions(listener));
+            observeSessions(sessions.getActiveSessions(listener));
         } catch (SecurityException denied) {
             disconnect();
         }
@@ -70,37 +78,54 @@ public final class SessionAccess extends NotificationListenerService {
     private void disconnect() {
         if (manager != null) manager.removeOnActiveSessionsChangedListener(sessionsChanged);
         manager = null;
-        selectSession(List.of());
+        observeSessions(Collections.emptyList());
     }
 
-    private void selectSession(List<MediaController> sessions) {
-        MediaController selected = null;
+    private void observeSessions(List<MediaController> sessions) {
+        Map<MediaSession.Token, MediaController> next = new LinkedHashMap<>();
         if (manager != null && sessions != null) {
             for (MediaController candidate : sessions) {
-                if (YTM.equals(candidate.getPackageName())) {
-                    selected = candidate;
-                    break;
+                MediaSession.Token token = candidate.getSessionToken();
+                if (next.containsKey(token)) continue;
+                MediaController existing = observed.remove(token);
+                if (existing == null) {
+                    candidate.registerCallback(playbackChanged, handler);
+                    existing = candidate;
                 }
+                next.put(token, existing);
             }
         }
-        if (controller == null || selected == null
-                || !controller.getSessionToken().equals(selected.getSessionToken())) {
-            if (controller != null) controller.unregisterCallback(playbackChanged);
-            controller = selected;
-            if (controller != null) controller.registerCallback(playbackChanged, handler);
-        }
+        for (MediaController removed : observed.values()) removed.unregisterCallback(playbackChanged);
+        observed.clear();
+        observed.putAll(next);
         update();
+    }
+
+    static MediaController preferredSession(Iterable<MediaController> sessions) {
+        MediaController paused = null;
+        for (MediaController candidate : sessions) {
+            PlaybackState state = candidate.getPlaybackState();
+            if (state == null || LyricsData.track(candidate.getMetadata()) == null) continue;
+            if (state.getState() == PlaybackState.STATE_PLAYING) return candidate;
+            if (paused == null && (state.getState() == PlaybackState.STATE_PAUSED
+                    || state.getState() == PlaybackState.STATE_BUFFERING
+                    || state.getState() == PlaybackState.STATE_CONNECTING)) {
+                paused = candidate;
+            }
+        }
+        return paused;
     }
 
     private void update() {
         handler.removeCallbacks(tick);
+        MediaController controller = preferredSession(observed.values());
         Track current = controller == null ? null : LyricsData.track(controller.getMetadata());
         PlaybackState state = controller == null ? null : controller.getPlaybackState();
         boolean playing = state != null && state.getState() == PlaybackState.STATE_PLAYING;
         if (!Objects.equals(track, current)) {
             track = current;
             generation++;
-            lines = List.of();
+            lines = Collections.emptyList();
             lookupRequested = false;
         }
         if (playing && current != null && !lookupRequested) {

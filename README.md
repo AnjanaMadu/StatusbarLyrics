@@ -1,6 +1,6 @@
 # Now Lyrics
 
-Now Lyrics shows the current YouTube Music track and synced lyrics on Android. On rooted devices, the optional Vector module shows the current line in the native SystemUI status bar. New lines slide up and fade in. Long lines wait 180 ms, scroll horizontally once, and hold at the end until the lyric changes.
+Now Lyrics shows the current track and synced lyrics on Android. It works with music apps that expose track metadata and playback through Android's media session, including Spotify, YouTube Music, Apple Music, Amazon Music, TIDAL, and Deezer. On rooted devices, the optional Vector module shows the current line in the native SystemUI status bar. New lines slide up and fade in. Long lines wait 180 ms, scroll horizontally once, and hold at the end until the lyric changes.
 
 The app reads playback information from Android's media session and tries NetEase Cloud Music first, using the search and lyric endpoints documented by the [StatusBarLyricExt provider](https://github.com/cjybyjk/StatusBarLyricExt/blob/main/app/src/main/java/io/cjybyjk/statuslyricext/provider/NeteaseProvider.java). It falls back to [LRCLIB](https://lrclib.net/) when NetEase is unavailable or returns no synced match. The info panel shows the lookup outcome for each provider tried.
 
@@ -13,7 +13,7 @@ The app reads playback information from Android's media session and tries NetEas
 1. Download the signed APK from [Releases](../../releases) and install it.
 2. Open Now Lyrics and grant notification access.
 3. For status-bar lyrics, enable **Now Lyrics** in Vector, select **System UI** (`com.android.systemui`) as the module scope, and restart SystemUI or reboot.
-4. Play a track in YouTube Music. The status-bar clock returns when playback pauses or no timed line is available.
+4. Play a track in your music app. The status-bar clock returns when playback pauses or no timed line is available.
 
 The app targets Android 8.0 and above. The SystemUI hook was tested on a rooted Pixel 5 running Android 17 with Vector 2.2. Status-bar layouts vary by ROM. The info button in the app shows the active media session, lyrics lookup result, and playback timing.
 
