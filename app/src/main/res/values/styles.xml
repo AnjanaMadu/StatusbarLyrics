@@ -1,6 +1,10 @@
 <resources>
     <style name="NowLyricsTheme" parent="android:style/Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#141218</item>
+        <item name="android:windowBackground">#0E0D12</item>
         <item name="android:colorAccent">#E5C9FF</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:enforceNavigationBarContrast" xmlns:tools="http://schemas.android.com/tools" tools:targetApi="29">false</item>
     </style>
 </resources>

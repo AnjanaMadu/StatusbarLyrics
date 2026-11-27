@@ -1,6 +1,7 @@
 package dev.nowlyrics;
 
 import android.content.ComponentName;
+import android.content.SharedPreferences;
 import android.media.session.MediaController;
 import android.media.session.MediaSession;
 import android.media.session.MediaSessionManager;
@@ -46,6 +47,8 @@ public final class SessionAccess extends NotificationListenerService {
     };
 
     private final Runnable tick = this::update;
+    private final SharedPreferences.OnSharedPreferenceChangeListener prefsChanged =
+            (prefs, key) -> handler.post(this::update);
     private MediaSessionManager manager;
     private final Map<MediaSession.Token, MediaController> observed = new LinkedHashMap<>();
     private Track track;
@@ -54,6 +57,7 @@ public final class SessionAccess extends NotificationListenerService {
 
     @Override public void onListenerConnected() {
         if (manager != null) return;
+        Prefs.get(this).registerOnSharedPreferenceChangeListener(prefsChanged);
         MediaSessionManager sessions = getSystemService(MediaSessionManager.class);
         ComponentName listener = new ComponentName(this, SessionAccess.class);
         try {
@@ -76,6 +80,7 @@ public final class SessionAccess extends NotificationListenerService {
     }
 
     private void disconnect() {
+        Prefs.get(this).unregisterOnSharedPreferenceChangeListener(prefsChanged);
         if (manager != null) manager.removeOnActiveSessionsChangedListener(sessionsChanged);
         manager = null;
         observeSessions(Collections.emptyList());
@@ -118,6 +123,14 @@ public final class SessionAccess extends NotificationListenerService {
 
     private void update() {
         handler.removeCallbacks(tick);
+        if (!Prefs.isStatusBarActive(this)) {
+            track = null;
+            generation++;
+            lines = Collections.emptyList();
+            lookupRequested = false;
+            StatusLyricProvider.publish(this, "");
+            return;
+        }
         MediaController controller = preferredSession(observed.values());
         Track current = controller == null ? null : LyricsData.track(controller.getMetadata());
         PlaybackState state = controller == null ? null : controller.getPlaybackState();
@@ -132,7 +145,7 @@ public final class SessionAccess extends NotificationListenerService {
             lookupRequested = true;
             int request = generation;
             network.execute(() -> {
-                List<Line> result = LyricsData.lookup(current).lines();
+                List<Line> result = LyricsData.lookup(this, current, false).lines();
                 handler.post(() -> {
                     if (request != generation) return;
                     lines = result;

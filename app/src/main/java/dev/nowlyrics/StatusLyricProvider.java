@@ -12,8 +12,13 @@ public final class StatusLyricProvider extends ContentProvider {
     private static volatile String current = "";
 
     static void publish(Context context, String text) {
-        if (current.equals(text)) return;
-        current = text;
+        String effective = Prefs.isStatusBarActive(context) ? text : "";
+        if (current.equals(effective)) return;
+        current = effective;
+        notifyChanged(context);
+    }
+
+    static void notifyChanged(Context context) {
         context.getContentResolver().notifyChange(Uri.parse(URI), null, 0);
     }
 
@@ -24,8 +29,10 @@ public final class StatusLyricProvider extends ContentProvider {
     @Override public Cursor query(Uri uri, String[] projection, String selection,
             String[] selectionArgs, String order) {
         if (!URI.equals(uri.toString())) return null;
+        Context context = getContext();
+        String value = (context == null || Prefs.isStatusBarActive(context)) ? current : "";
         MatrixCursor cursor = new MatrixCursor(new String[]{"lyric"}, 1);
-        cursor.addRow(new Object[]{current});
+        cursor.addRow(new Object[]{value});
         return cursor;
     }
 

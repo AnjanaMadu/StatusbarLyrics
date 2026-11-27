@@ -2,7 +2,7 @@
 
 Now Lyrics shows the current track and synced lyrics on Android. It works with music apps that expose track metadata and playback through Android's media session, including Spotify, YouTube Music, Apple Music, Amazon Music, TIDAL, and Deezer. On rooted devices, the optional Vector module shows the current line in the native SystemUI status bar. New lines slide up and fade in. Long lines wait 180 ms, scroll horizontally once, and hold at the end until the lyric changes.
 
-The app reads playback information from Android's media session and tries NetEase Cloud Music first, using the search and lyric endpoints documented by the [StatusBarLyricExt provider](https://github.com/cjybyjk/StatusBarLyricExt/blob/main/app/src/main/java/io/cjybyjk/statuslyricext/provider/NeteaseProvider.java). It falls back to [LRCLIB](https://lrclib.net/) when NetEase is unavailable or returns no synced match. The info panel shows the lookup outcome for each provider tried.
+The app reads playback information from Android's media session and uses [LRCLIB](https://lrclib.net/) to find synced lyrics. The info panel shows the lookup outcome.
 
 ## Demo
 
