@@ -4,6 +4,10 @@ Now Lyrics shows the current YouTube Music track and synced lyrics on Android. O
 
 The app reads playback information from Android's media session and tries NetEase Cloud Music first, using the search and lyric endpoints documented by the [StatusBarLyricExt provider](https://github.com/cjybyjk/StatusBarLyricExt/blob/main/app/src/main/java/io/cjybyjk/statuslyricext/provider/NeteaseProvider.java). It falls back to [LRCLIB](https://lrclib.net/) when NetEase is unavailable or returns no synced match. The info panel shows the lookup outcome for each provider tried.
 
+## Demo
+
+![Synced lyrics scrolling in the Android status bar](docs/status-bar-demo.webp)
+
 ## Install
 
 1. Download the signed APK from [Releases](../../releases) and install it.
