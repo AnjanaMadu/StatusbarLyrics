@@ -21,7 +21,7 @@ Now Lyrics displays synchronized lyrics for the track playing on Android. Follow
 
 ### Enable status-bar lyrics
 
-1. On a rooted device, enable **Now Lyrics** in Vector.
+1. On a rooted device, enable **Now Lyrics** in Vector with modern Xposed API 101 support.
 2. Set the module scope to **System UI** (`com.android.systemui`).
 3. Restart SystemUI or reboot, then turn on **Bar** in Now Lyrics.
 
@@ -29,7 +29,7 @@ Now Lyrics displays synchronized lyrics for the track playing on Android. Follow
 | --- | --- |
 | LineageOS-based ROMs | The existing v2 hook works on tested builds. |
 | Samsung One UI | The Samsung clock hook was confirmed on the experimental branch. The integrated v2 build and width adjustment still need Galaxy validation. |
-| Pixel / AOSP-style ROMs | The status-bar hook was tested on a rooted Pixel 5 running Android 17 with Vector 2.2. |
+| Pixel / AOSP-style ROMs | The legacy status-bar hook was tested on a rooted Pixel 5 running Android 17 with Vector 2.2; the modern API migration needs device validation. |
 
 Compatibility depends on the ROM's SystemUI layout. If lyrics appear in the app but the status bar still shows the clock, check **Bar**, confirm the Vector scope, and restart SystemUI. When reporting an issue, include your device, ROM version, and any SystemUI log entries tagged `NowLyrics`.
 
